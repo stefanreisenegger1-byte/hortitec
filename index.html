@@ -1484,13 +1484,10 @@ async function reloadRiegoDia() {
   const fechaAnt = riegoFechaAnterior();
   const sectorIds = (state.sectores || []).map(s => s.id);
 
-  // Load ETP for selected date and prior date
-  const [etpFecha, etpAnt] = await Promise.all([
-    sb.from('etp_diaria').select('*').eq('predio_id', state.predioActual.id).eq('fecha', fechaAnt).maybeSingle().then(r=>r.data),
-    sb.from('etp_diaria').select('*').eq('predio_id', state.predioActual.id).eq('fecha', fecha).maybeSingle().then(r=>r.data),
-  ]);
-  state.etpAyer = etpFecha;   // ETP del día anterior a la fecha seleccionada
-  state.etpHoy  = etpAnt;
+  // ETP: se guarda y busca con la misma fecha del día de riego
+  const etpFecha = await sb.from('etp_diaria').select('*').eq('predio_id', state.predioActual.id).eq('fecha', fecha).maybeSingle().then(r=>r.data);
+  state.etpAyer = etpFecha;
+  state.etpHoy  = null;
 
   // Load riego records for selected date
   state.riegoHoy = {};
@@ -1523,7 +1520,7 @@ async function reloadRiegoDia() {
 function renderEtpBanner() {
   const el = document.getElementById('etp-banner-area');
   const etp = state.etpAyer;
-  const fechaAnt = riegoFechaAnterior();
+  const fechaAnt = riegoFechaActual();
   const esHoy = riegoFechaActual() === todayStr();
   if (etp) {
     el.innerHTML = `
@@ -1560,7 +1557,7 @@ async function usePct(val, tipo) {
   try {
     await dbInsert('etp_diaria', {
       predio_id: state.predioActual.id,
-      fecha: riegoFechaAnterior(),
+      fecha: riegoFechaActual(),
       valor_mm: val, tipo_ingreso: tipo,
       ingresado_por: state.user?.email || 'sistema',
     });
@@ -1573,7 +1570,7 @@ async function usePct(val, tipo) {
 }
 
 function openEtpModal(forHoy=false) {
-  const fecha = forHoy ? riegoFechaActual() : riegoFechaAnterior();
+  const fecha = riegoFechaActual();
   document.getElementById('etp-modal-sub').textContent = 'Fecha: ' + fmtDateEs(fecha);
   document.getElementById('etp-val-input').value = '';
   document.getElementById('modal-etp').classList.add('open');
@@ -1587,7 +1584,7 @@ document.getElementById('etp-save-btn').addEventListener('click', async () => {
   const btn = document.getElementById('etp-save-btn');
   btn.disabled = true; btn.textContent = 'Guardando…';
   try {
-    const fechaEtp = riegoFechaAnterior();
+    const fechaEtp = riegoFechaActual();
     await sb.from('etp_diaria').upsert({
       predio_id: state.predioActual.id, fecha: fechaEtp,
       valor_mm: val, tipo_ingreso: tipo,
