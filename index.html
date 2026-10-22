@@ -2234,7 +2234,8 @@ function renderSectoresAdmin(sectores, ciclos, cultivos, listEl) {
     listEl.innerHTML = '<div class="empty-state">No hay sectores registrados.</div>';
     return;
   }
-  sectores.forEach(sector => {
+  const sorted = [...sectores].sort((a,b) => parseFloat(a.nombre) - parseFloat(b.nombre) || a.nombre.localeCompare(b.nombre));
+  sorted.forEach(sector => {
     const cicloActivo = ciclos.find(c => c.sector_id === sector.id && c.activo);
     const cultivo = cicloActivo ? cultivos.find(c => c.id === cicloActivo.cultivo_id) : null;
     const item = document.createElement('div');
