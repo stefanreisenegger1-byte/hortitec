@@ -2053,7 +2053,8 @@ async function loadHidraulicoView() {
   // Populate sector selector
   const sel = document.getElementById('hid-sector-sel');
   sel.innerHTML = '';
-  const activos = state.sectores.filter(s => s.activo);
+  const activos = state.sectores.filter(s => s.activo)
+    .sort((a,b) => parseFloat(a.nombre) - parseFloat(b.nombre) || a.nombre.localeCompare(b.nombre));
   activos.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.id; opt.textContent = s.nombre;
