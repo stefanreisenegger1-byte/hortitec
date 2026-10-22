@@ -1587,9 +1587,9 @@ document.getElementById('etp-save-btn').addEventListener('click', async () => {
   const btn = document.getElementById('etp-save-btn');
   btn.disabled = true; btn.textContent = 'Guardando…';
   try {
-    const fecha = state.etpAyer ? riegoFechaAnterior() : riegoFechaAnterior();
+    const fechaEtp = riegoFechaAnterior();
     await sb.from('etp_diaria').upsert({
-      predio_id: state.predioActual.id, fecha,
+      predio_id: state.predioActual.id, fecha: fechaEtp,
       valor_mm: val, tipo_ingreso: tipo,
       ingresado_por: state.user?.email || 'sistema',
     }, { onConflict: 'predio_id,fecha' });
@@ -1609,7 +1609,7 @@ document.getElementById('etp-save-btn').addEventListener('click', async () => {
 // ============================================================
 function renderSectorList() {
   const listEl = document.getElementById('sector-list');
-  const etp = state.etpAyer?.valor_mm || state.etpHoy?.valor_mm || null;
+  const etp = state.etpAyer?.valor_mm || null;
 
   const activeSectores = state.sectores.filter(s => s.activo)
     .sort((a, b) => parseFloat(a.nombre) - parseFloat(b.nombre) || a.nombre.localeCompare(b.nombre));
