@@ -2044,10 +2044,7 @@ async function loadHidraulicoView() {
   if (!state.predioActual) return;
   const areaEl = document.getElementById('hid-form-area');
 
-  if (state.predioActual.tipo_caudal !== 'medido') {
-    areaEl.innerHTML = '<div class="no-data-info">Esta vista solo aplica para predios con caudal medido.</div>';
-    return;
-  }
+  // Hidráulico disponible para todos los predios
 
   // Populate sector selector
   const sel = document.getElementById('hid-sector-sel');
