@@ -1306,11 +1306,7 @@ function selectPredio(predio) {
   // Hydraulic tab always visible
   document.getElementById('tab-hid').hidden = false;
 
-  if (state.activeTab === 'hidraulico') {
-    loadHidraulicoView();
-  } else {
-    switchTab('riego');
-  }
+  switchTab('riego');
 }
 
 // ============================================================
@@ -2057,11 +2053,14 @@ function openKcModal(cultivoId, edadActual) {
 // ============================================================
 async function loadHidraulicoView() {
   if (!state.predioActual) return;
-  const areaEl = document.getElementById('hid-form-area');
 
-  // Hidráulico disponible para todos los predios
+  // Mostrar campos según tipo de caudal ANTES de cualquier await
+  const esNominal = (state.predioActual?.tipo_caudal || 'medido') !== 'medido';
+  document.getElementById('hid-campos-medido').hidden = esNominal;
+  document.getElementById('hid-campos-nominal').hidden = !esNominal;
+  document.getElementById('hid-seccion-caudal').textContent = esNominal ? 'Caudal nominal' : 'Medición de caudal';
 
-  // Populate sector selector
+  // Populate sector selector con sectores del predio actual
   const sel = document.getElementById('hid-sector-sel');
   sel.innerHTML = '';
   const activos = state.sectores.filter(s => s.activo)
@@ -2087,12 +2086,6 @@ async function loadHidraulicoView() {
       if (data) state._hidUltimo[sid] = data;
     }
   }
-
-  // Mostrar campos según tipo de caudal del predio actual
-  const esNominal = (state.predioActual?.tipo_caudal || 'medido') !== 'medido';
-  document.getElementById('hid-campos-medido').hidden = esNominal;
-  document.getElementById('hid-campos-nominal').hidden = !esNominal;
-  document.getElementById('hid-seccion-caudal').textContent = esNominal ? 'Caudal nominal' : 'Medición de caudal';
 
   setupHidCalculations();
 }
