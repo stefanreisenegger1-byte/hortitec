@@ -597,18 +597,28 @@ html, body {
             <div class="dmy-row" id="hid-fecha"></div>
           </div>
 
-          <div class="section-title" style="padding:12px 0 4px">Medición de caudal</div>
-          <div class="form-field">
-            <div class="form-label">Tiempo para 1.000 litros (MM:SS)</div>
-            <div class="time-row">
-              <input class="form-input" id="hid-mm" type="number" min="0" placeholder="MM" style="flex:1">
-              <span class="time-sep">:</span>
-              <input class="form-input" id="hid-ss" type="number" min="0" max="59" placeholder="SS" style="flex:1">
+          <div class="section-title" style="padding:12px 0 4px" id="hid-seccion-caudal">Medición de caudal</div>
+          <!-- Campos para caudal MEDIDO -->
+          <div id="hid-campos-medido">
+            <div class="form-field">
+              <div class="form-label">Tiempo para 1.000 litros (MM:SS)</div>
+              <div class="time-row">
+                <input class="form-input" id="hid-mm" type="number" min="0" placeholder="MM" style="flex:1">
+                <span class="time-sep">:</span>
+                <input class="form-input" id="hid-ss" type="number" min="0" max="59" placeholder="SS" style="flex:1">
+              </div>
+            </div>
+            <div class="form-field">
+              <div class="form-label">N° hileras activas</div>
+              <input class="form-input" id="hid-n-lat" type="number" placeholder="48">
             </div>
           </div>
-          <div class="form-field">
-            <div class="form-label">N° hileras activas</div>
-            <input class="form-input" id="hid-n-lat" type="number" placeholder="48">
+          <!-- Campo para caudal NOMINAL -->
+          <div id="hid-campos-nominal" hidden>
+            <div class="form-field">
+              <div class="form-label">Caudal nominal cinta (l/h/m)</div>
+              <input class="form-input" id="hid-caudal-nominal" type="number" step="0.001" placeholder="0.600">
+            </div>
           </div>
 
           <div class="section-title" style="padding:12px 0 4px">Parámetros del sector <span style="font-weight:400;text-transform:none;font-size:11px">(admin — cambian solo excepcionalmente)</span></div>
@@ -2073,11 +2083,17 @@ async function loadHidraulicoView() {
     }
   }
 
+  // Mostrar campos según tipo de caudal
+  const esNominal = state.predioActual.tipo_caudal !== 'medido';
+  document.getElementById('hid-campos-medido').hidden = esNominal;
+  document.getElementById('hid-campos-nominal').hidden = !esNominal;
+  document.getElementById('hid-seccion-caudal').textContent = esNominal ? 'Caudal nominal' : 'Medición de caudal';
+
   setupHidCalculations();
 }
 
 function setupHidCalculations() {
-  const inputs = ['hid-mm','hid-ss','hid-n-lat','hid-long-hilera','hid-sep-hileras','hid-pres-ent','hid-pres-sal'];
+  const inputs = ['hid-mm','hid-ss','hid-n-lat','hid-long-hilera','hid-sep-hileras','hid-pres-ent','hid-pres-sal','hid-caudal-nominal'];
   inputs.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', recalcHid);
@@ -2087,37 +2103,46 @@ function setupHidCalculations() {
 }
 
 function onHidSectorChange() {
-  // Pre-fill longitud hilera y separacion from last record if available
   const sectorId = document.getElementById('hid-sector-sel').value;
   const ultimo = state._hidUltimo?.[sectorId];
   if (ultimo) {
     if (ultimo.longitud_hilera_m) document.getElementById('hid-long-hilera').value = ultimo.longitud_hilera_m;
     if (ultimo.separacion_hileras_m) document.getElementById('hid-sep-hileras').value = ultimo.separacion_hileras_m;
     if (ultimo.num_hileras) document.getElementById('hid-n-lat').value = ultimo.num_hileras;
+    // Para predio nominal: pre-cargar caudal nominal del último registro
+    const nomEl = document.getElementById('hid-caudal-nominal');
+    if (nomEl && !nomEl.hidden && ultimo.caudal_calculado) nomEl.value = ultimo.caudal_calculado;
   }
   recalcHid();
 }
 
 function recalcHid() {
-  const mm = parseInt(document.getElementById('hid-mm').value) || 0;
-  const ss = parseInt(document.getElementById('hid-ss').value) || 0;
-  const totalMin = mm + ss / 60;
-  const nHileras = parseInt(document.getElementById('hid-n-lat').value) || 0;
-  const longHilera = parseFloat(document.getElementById('hid-long-hilera').value) || 0;
+  const esNominal = state.predioActual?.tipo_caudal !== 'medido';
   const presEnt = parseFloat(document.getElementById('hid-pres-ent').value);
   const presSal = parseFloat(document.getElementById('hid-pres-sal').value);
   const sectorId = document.getElementById('hid-sector-sel').value;
 
-  // Metros lineales
-  const metrosLineales = nHileras > 0 && longHilera > 0 ? nHileras * longHilera : null;
-  document.getElementById('hid-metros-val').textContent = metrosLineales ? fmtNum(metrosLineales, 0) : '—';
+  let metrosLineales = null, caudalTotal = null, caudalPorMetro = null;
 
-  // Caudal total (l/h) = 1000 litros / tiempo en horas
-  const caudalTotal = totalMin > 0 ? (1000 / totalMin) * 60 : null;
-  document.getElementById('hid-caudal-total-val').textContent = caudalTotal ? fmtNum(caudalTotal, 0) : '—';
+  if (esNominal) {
+    // Modo nominal: caudal por metro ingresado directamente
+    caudalPorMetro = parseFloat(document.getElementById('hid-caudal-nominal').value) || null;
+    document.getElementById('hid-metros-val').textContent = '—';
+    document.getElementById('hid-caudal-total-val').textContent = '—';
+  } else {
+    // Modo medido: calcular desde tiempo + hileras
+    const mm = parseInt(document.getElementById('hid-mm').value) || 0;
+    const ss = parseInt(document.getElementById('hid-ss').value) || 0;
+    const totalMin = mm + ss / 60;
+    const nHileras = parseInt(document.getElementById('hid-n-lat').value) || 0;
+    const longHilera = parseFloat(document.getElementById('hid-long-hilera').value) || 0;
+    metrosLineales = nHileras > 0 && longHilera > 0 ? nHileras * longHilera : null;
+    document.getElementById('hid-metros-val').textContent = metrosLineales ? fmtNum(metrosLineales, 0) : '—';
+    caudalTotal = totalMin > 0 ? (1000 / totalMin) * 60 : null;
+    document.getElementById('hid-caudal-total-val').textContent = caudalTotal ? fmtNum(caudalTotal, 0) : '—';
+    caudalPorMetro = (caudalTotal && metrosLineales) ? caudalTotal / metrosLineales : null;
+  }
 
-  // Caudal por metro (l/h/m)
-  const caudalPorMetro = (caudalTotal && metrosLineales) ? caudalTotal / metrosLineales : null;
   document.getElementById('hid-caudal-val').textContent = caudalPorMetro ? fmtNum(caudalPorMetro, 3) : '—';
 
   // Comparar con último registro
@@ -2150,25 +2175,32 @@ document.getElementById('hid-save-btn').addEventListener('click', async () => {
   const fecha = getDMY('hid-fecha');
   const presEnt = parseFloat(document.getElementById('hid-pres-ent').value) || null;
   const presSal = parseFloat(document.getElementById('hid-pres-sal').value) || null;
-  const nHileras = parseInt(document.getElementById('hid-n-lat').value) || null;
-  const longHilera = parseFloat(document.getElementById('hid-long-hilera').value) || null;
   const sepHileras = parseFloat(document.getElementById('hid-sep-hileras').value) || 0.75;
-  const mm = parseInt(document.getElementById('hid-mm').value) || 0;
-  const ss = parseInt(document.getElementById('hid-ss').value) || 0;
-  const totalMin = mm + ss / 60;
-  const tiempoMmSs = (mm || ss) ? `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}` : null;
-  const metrosLineales = (nHileras && longHilera) ? nHileras * longHilera : null;
-  const caudalTotal = totalMin > 0 ? (1000 / totalMin) * 60 : null;
-  const caudalPorMetro = (caudalTotal && metrosLineales) ? caudalTotal / metrosLineales : null;
 
   if (!sectorId || !fecha) {
     alert('Selecciona sector y fecha.');
     return;
   }
-  if (!tiempoMmSs && !caudalTotal) {
-    alert('Ingresa el tiempo para 1.000 litros (MM:SS).');
-    return;
+  const esNominal = state.predioActual?.tipo_caudal !== 'medido';
+  let tiempoMmSs = null, metrosLineales = null, caudalTotal = null, caudalPorMetro = null;
+  let nHileras = null, longHilera = null;
+
+  if (esNominal) {
+    caudalPorMetro = parseFloat(document.getElementById('hid-caudal-nominal').value) || null;
+    if (!caudalPorMetro) { alert('Ingresa el caudal nominal de la cinta (l/h/m).'); return; }
+  } else {
+    const mm2 = parseInt(document.getElementById('hid-mm').value) || 0;
+    const ss2 = parseInt(document.getElementById('hid-ss').value) || 0;
+    const totalMin = mm2 + ss2 / 60;
+    tiempoMmSs = (mm2 || ss2) ? `${String(mm2).padStart(2,'0')}:${String(ss2).padStart(2,'0')}` : null;
+    nHileras = parseInt(document.getElementById('hid-n-lat').value) || null;
+    longHilera = parseFloat(document.getElementById('hid-long-hilera').value) || null;
+    metrosLineales = (nHileras && longHilera) ? nHileras * longHilera : null;
+    caudalTotal = totalMin > 0 ? (1000 / totalMin) * 60 : null;
+    caudalPorMetro = (caudalTotal && metrosLineales) ? caudalTotal / metrosLineales : null;
+    if (!tiempoMmSs) { alert('Ingresa el tiempo para 1.000 litros (MM:SS).'); return; }
   }
+
   const btn = document.getElementById('hid-save-btn');
   btn.disabled = true; btn.textContent = 'Guardando…';
   try {
@@ -2191,8 +2223,8 @@ document.getElementById('hid-save-btn').addEventListener('click', async () => {
     state._hidUltimo[sectorId] = row;
     alert('Datos hidráulicos guardados correctamente.');
     // Reset measurement fields only
-    ['hid-pres-ent','hid-pres-sal','hid-n-lat','hid-mm','hid-ss'].forEach(id => {
-      document.getElementById(id).value = '';
+    ['hid-pres-ent','hid-pres-sal','hid-n-lat','hid-mm','hid-ss','hid-caudal-nominal'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
     });
     recalcHid();
   } catch(e) {
