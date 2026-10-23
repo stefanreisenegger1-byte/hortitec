@@ -1520,7 +1520,7 @@ async function reloadRiegoDia() {
 function renderEtpBanner() {
   const el = document.getElementById('etp-banner-area');
   const etp = state.etpAyer;
-  const fechaAnt = riegoFechaActual();
+  const fechaAnt = riegoFechaAnterior();
   const esHoy = riegoFechaActual() === todayStr();
   if (etp) {
     el.innerHTML = `
