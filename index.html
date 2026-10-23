@@ -1528,7 +1528,7 @@ function renderEtpBanner() {
         <div class="etp-ok">
           <div class="etp-icon">🌤</div>
           <div class="etp-info">
-            <div class="etp-label">ETP (${fmtDateEs(fechaAnt)})</div>
+            <div class="etp-label">ETP (${fmtDateEs(riegoFechaAnterior())})</div>
             <div class="etp-val">${fmtNum(etp.valor_mm, 2)} mm/día</div>
             <div class="etp-sub">Fuente: ${etp.tipo_ingreso || '—'} — Ing. ${etp.ingresado_por || '—'}</div>
           </div>
