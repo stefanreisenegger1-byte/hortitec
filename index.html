@@ -1305,7 +1305,11 @@ function selectPredio(predio) {
   // Hydraulic tab always visible
   document.getElementById('tab-hid').hidden = false;
 
-  switchTab('riego');
+  if (state.activeTab === 'hidraulico') {
+    loadHidraulicoView();
+  } else {
+    switchTab('riego');
+  }
 }
 
 // ============================================================
@@ -2083,8 +2087,8 @@ async function loadHidraulicoView() {
     }
   }
 
-  // Mostrar campos según tipo de caudal
-  const esNominal = state.predioActual.tipo_caudal !== 'medido';
+  // Mostrar campos según tipo de caudal del predio actual
+  const esNominal = (state.predioActual?.tipo_caudal || 'medido') !== 'medido';
   document.getElementById('hid-campos-medido').hidden = esNominal;
   document.getElementById('hid-campos-nominal').hidden = !esNominal;
   document.getElementById('hid-seccion-caudal').textContent = esNominal ? 'Caudal nominal' : 'Medición de caudal';
