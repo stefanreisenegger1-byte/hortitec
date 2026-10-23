@@ -1292,9 +1292,8 @@ function selectPredio(predio) {
   document.querySelectorAll('.predio-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.id === predio.id));
 
-  // Show/hide hydraulic tab (only for medido predios)
-  const showHid = predio.tipo_caudal === 'medido';
-  document.getElementById('tab-hid').hidden = !showHid;
+  // Hydraulic tab always visible
+  document.getElementById('tab-hid').hidden = false;
 
   switchTab('riego');
 }
