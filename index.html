@@ -1382,7 +1382,8 @@ function calcRecomendacion(sector, ciclo, cultivo, etp, saldoAnterior=0) {
   if (kc == null) return null;
 
   const efic = +(sector.eficiencia || 0.90);
-  const volBruto = etp * kc / efic;
+  const sep = +(sector.separacion_hileras_m || 1.0);
+  const volBruto = etp * kc * sep / efic;
   const volTotal = volBruto + saldoAnterior;
 
   // Determine thresholds (esPapa ya definido arriba)
