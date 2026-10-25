@@ -567,6 +567,7 @@ html, body {
       <div class="header-title">Hortitec Riego</div>
       <div class="header-predio" id="predio-btns"></div>
       <div class="header-date" id="header-date"></div>
+      <button onclick="openPerfilModal()" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;padding:0 4px" title="Perfil">👤</button>
     </div>
 
     <!-- CONTENT -->
@@ -1026,6 +1027,26 @@ html, body {
     </div>
   </div>
 
+  <!-- PERFIL / CAMBIAR CLAVE MODAL -->
+  <div class="modal-overlay" id="modal-perfil">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-title" id="perfil-modal-title">Mi perfil</div>
+      <div class="modal-sub" id="perfil-modal-sub"></div>
+      <div class="form-field" style="margin-top:16px">
+        <div class="form-label">Nueva contraseña</div>
+        <input class="form-input" id="perfil-pwd1" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Repetir contraseña</div>
+        <input class="form-input" id="perfil-pwd2" type="password" placeholder="Repite la contraseña" autocomplete="new-password">
+      </div>
+      <div id="perfil-error" style="color:var(--rojo);font-size:13px;margin-bottom:8px"></div>
+      <button class="btn-save" id="perfil-save-btn">Cambiar contraseña</button>
+      <button class="btn-cancel" id="perfil-logout-btn" style="margin-top:8px">Cerrar sesión</button>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-nuevo-ciclo">
     <div class="modal-sheet">
       <div class="modal-handle"></div>
@@ -1215,7 +1236,7 @@ async function doLogin() {
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
     if (error) throw error;
     state.user = data.user;
-    state.role = data.user.user_metadata?.role || 'encargado';
+    await loadPerfil();
     await initApp();
   } catch(e) {
     errEl.textContent = 'Correo o contraseña incorrectos.';
@@ -1223,13 +1244,29 @@ async function doLogin() {
   }
 }
 
-sb.auth.getSession().then(({ data }) => {
+sb.auth.getSession().then(async ({ data }) => {
   if (data?.session?.user) {
     state.user = data.session.user;
-    state.role = data.session.user.user_metadata?.role || 'encargado';
+    await loadPerfil();
     initApp();
   }
 });
+
+async function loadPerfil() {
+  try {
+    const { data } = await sb.from('perfiles')
+      .select('rol, predio_id, clave_temporal')
+      .eq('id', state.user.id)
+      .maybeSingle();
+    state.role = data?.rol || 'encargado';
+    state.perfilPredioId = data?.predio_id || null;
+    state.perfilClaveTemporal = data?.clave_temporal ?? false;
+  } catch(e) {
+    state.role = 'encargado';
+    state.perfilPredioId = null;
+    state.perfilClaveTemporal = false;
+  }
+}
 
 // ============================================================
 // INIT
@@ -1250,6 +1287,11 @@ async function initApp() {
 
   setupTabs();
   await loadPredios();
+
+  // Forzar cambio de clave si es temporal
+  if (state.perfilClaveTemporal) {
+    setTimeout(() => openPerfilModal(true), 500);
+  }
 }
 
 // ============================================================
@@ -1276,7 +1318,12 @@ function switchTab(tab) {
 // ============================================================
 async function loadPredios() {
   try {
-    state.predios = await dbGet('predios');
+    let predios = await dbGet('predios');
+    // Encargado solo ve su predio asignado
+    if (state.perfilPredioId) {
+      predios = predios.filter(p => p.id === state.perfilPredioId);
+    }
+    state.predios = predios;
     renderPredioButtons();
     if (state.predios.length > 0) {
       selectPredio(state.predios[0]);
@@ -2583,11 +2630,56 @@ async function exportarExcel() {
 }
 
 // ============================================================
+// ============================================================
+// PERFIL / CAMBIAR CLAVE
+// ============================================================
+function openPerfilModal(forzado=false) {
+  const modal = document.getElementById('modal-perfil');
+  document.getElementById('perfil-modal-title').textContent = forzado ? 'Cambia tu contraseña' : 'Mi perfil';
+  document.getElementById('perfil-modal-sub').textContent = forzado
+    ? 'Es tu primer ingreso. Debes establecer una contraseña propia antes de continuar.'
+    : (state.user?.email || '');
+  document.getElementById('perfil-pwd1').value = '';
+  document.getElementById('perfil-pwd2').value = '';
+  document.getElementById('perfil-error').textContent = '';
+  modal.classList.add('open');
+  // Si es forzado, no se puede cerrar tocando el overlay
+  modal._forzado = forzado;
+}
+
+document.getElementById('perfil-save-btn').addEventListener('click', async () => {
+  const pwd1 = document.getElementById('perfil-pwd1').value;
+  const pwd2 = document.getElementById('perfil-pwd2').value;
+  const errEl = document.getElementById('perfil-error');
+  errEl.textContent = '';
+  if (pwd1.length < 8) { errEl.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
+  if (pwd1 !== pwd2) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
+  const btn = document.getElementById('perfil-save-btn');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const { error } = await sb.auth.updateUser({ password: pwd1 });
+    if (error) throw error;
+    // Marcar que ya cambió la clave
+    await sb.from('perfiles').update({ clave_temporal: false }).eq('id', state.user.id);
+    document.getElementById('modal-perfil').classList.remove('open');
+    alert('Contraseña actualizada correctamente.');
+  } catch(e) {
+    errEl.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Cambiar contraseña';
+  }
+});
+
+document.getElementById('perfil-logout-btn').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  location.reload();
+});
+
 // CLOSE MODALS ON OVERLAY CLICK
 // ============================================================
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('open');
+    if (e.target === overlay && !overlay._forzado) overlay.classList.remove('open');
   });
 });
 
