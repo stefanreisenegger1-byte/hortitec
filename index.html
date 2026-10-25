@@ -1546,20 +1546,87 @@ function renderEtpBanner() {
         </div>
       </div>`;
   } else {
+    // Mostrar banner con percentiles calculando
     el.innerHTML = `
       <div class="etp-banner">
         <div class="etp-missing">
           <div class="etp-missing-title">⚠️ ETP del ${fmtDateEs(fechaAnt)} no registrada</div>
           <div class="etp-missing-sub">Selecciona un percentil de referencia o ingresa el valor manual:</div>
-          <div class="etp-percentiles">
-            <button class="pct-btn" onclick="usePct(2.01,'percentil_p25')">P25 — 2.01 mm</button>
-            <button class="pct-btn" onclick="usePct(2.69,'percentil_p50')">P50 — 2.69 mm</button>
-            <button class="pct-btn" onclick="usePct(3.06,'percentil_p75')">P75 — 3.06 mm</button>
-            <button class="pct-btn" onclick="usePct(3.74,'percentil_max')">Máx — 3.74 mm</button>
-          </div>
+          <div class="etp-percentiles" id="etp-pct-btns"><span style="color:var(--fg-3);font-size:13px">Calculando percentiles…</span></div>
           <button class="btn-ingresar-etp" onclick="openEtpModal()">Ingresar valor</button>
         </div>
       </div>`;
+    // Calcular percentiles en background
+    calcularPercentileEtp().then(pct => {
+      const cont = document.getElementById('etp-pct-btns');
+      if (!cont) return;
+      if (!pct) {
+        cont.innerHTML = '<span style="color:var(--fg-3);font-size:13px">Sin datos históricos suficientes</span>';
+        return;
+      }
+      cont.innerHTML = `
+        <button class="pct-btn" onclick="usePct(${pct.p25},'percentil_p25')">P25 — ${fmtNum(pct.p25,2)} mm</button>
+        <button class="pct-btn" onclick="usePct(${pct.p50},'percentil_p50')">P50 — ${fmtNum(pct.p50,2)} mm</button>
+        <button class="pct-btn" onclick="usePct(${pct.p75},'percentil_p75')">P75 — ${fmtNum(pct.p75,2)} mm</button>
+        <button class="pct-btn" onclick="usePct(${pct.max},'percentil_max')">Máx — ${fmtNum(pct.max,2)} mm</button>`;
+    });
+  }
+}
+
+async function calcularPercentileEtp() {
+  try {
+    // Rango ±15 días del día/mes actual, solo años anteriores al actual
+    const hoy = new Date(riegoFechaAnterior());
+    const anioActual = new Date().getFullYear();
+    const mes = hoy.getMonth() + 1;
+    const dia = hoy.getDate();
+
+    // Construir rango de fechas del año: dia-15 a dia+15 (en días del año)
+    const fechaBase = new Date(2000, mes - 1, dia); // año ficticio para calcular rango
+    const desde = new Date(fechaBase); desde.setDate(desde.getDate() - 15);
+    const hasta = new Date(fechaBase); hasta.setDate(hasta.getDate() + 15);
+    const mesDe = desde.getMonth() + 1, diaDe = desde.getDate();
+    const mesHa = hasta.getMonth() + 1, diaHa = hasta.getDate();
+
+    // Traer todos los registros históricos del predio (años anteriores)
+    const { data } = await sb.from('etp_diaria')
+      .select('fecha, valor_mm')
+      .eq('predio_id', state.predioActual.id)
+      .lt('fecha', `${anioActual}-01-01`)
+      .not('valor_mm', 'is', null);
+
+    if (!data || data.length === 0) return null;
+
+    // Filtrar los que caen en el rango ±15 días (por mes/día)
+    const valores = data.filter(r => {
+      const f = new Date(r.fecha + 'T12:00:00');
+      const fm = f.getMonth() + 1, fd = f.getDate();
+      // Comparar mes/día: desde <= fm/fd <= hasta
+      const enRango = (fm * 100 + fd) >= (mesDe * 100 + diaDe) &&
+                      (fm * 100 + fd) <= (mesHa * 100 + diaHa);
+      // Manejar cruce de año (ej: 20 dic - 19 ene)
+      if (mesDe <= mesHa) return enRango;
+      return (fm * 100 + fd) >= (mesDe * 100 + diaDe) ||
+             (fm * 100 + fd) <= (mesHa * 100 + diaHa);
+    }).map(r => r.valor_mm).sort((a, b) => a - b);
+
+    if (valores.length < 4) return null;
+
+    const pct = (arr, p) => {
+      const idx = (p / 100) * (arr.length - 1);
+      const lo = Math.floor(idx), hi = Math.ceil(idx);
+      return arr[lo] + (arr[hi] - arr[lo]) * (idx - lo);
+    };
+
+    return {
+      p25: Math.round(pct(valores, 25) * 100) / 100,
+      p50: Math.round(pct(valores, 50) * 100) / 100,
+      p75: Math.round(pct(valores, 75) * 100) / 100,
+      max: Math.round(Math.max(...valores) * 100) / 100,
+    };
+  } catch(e) {
+    console.error('Error calculando percentiles ETP:', e);
+    return null;
   }
 }
 
